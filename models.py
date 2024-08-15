@@ -28,3 +28,13 @@ class LoginSchema(BaseModel):
                 "password": "samplePassword123"
             }
         }
+
+class TodoItemPatchSchema(BaseModel):
+    completed: bool
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "completed": True
+            }
+        }
