@@ -1,12 +1,13 @@
-import uvicorn
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from supabase import create_client, Client
 from gotrue.errors import AuthApiError
-from models import LoginSchema, SignUpSchema, TodoItemPatchSchema
+from app.models import LoginSchema, SignUpSchema
+
+from .routers import todos, users
+from .dependencies import supabase
 
 
 app = FastAPI(
@@ -28,10 +29,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
+app.include_router(todos.router)
+app.include_router(users.router)
 
-supabase: Client = create_client(url, key)
+
 
 
 
@@ -70,13 +71,16 @@ async def create_access_token(user_data:LoginSchema):
 
 	try:
 		data = supabase.auth.sign_in_with_password(credentials)
-	
+		family = supabase.table('families').select('*').eq('created_by', data.user.id).execute()
+
 		return JSONResponse(
 			content={
 				"id": data.user.id,
 				"email": data.user.email,
 				"aud": data.user.aud,
-				"meta_data": data.user.user_metadata
+				"meta_data": data.user.user_metadata,
+				"families": family.data,
+				"access": data.session.access_token
 			}, status_code=200
 		)
 	except:
@@ -85,49 +89,3 @@ async def create_access_token(user_data:LoginSchema):
 			detail="invalid credentials"
 		)
 	
-@app.get('/todo')
-async def get_todos():
-	try:
-		data = supabase.table('todos').select('*, category:category(title), item_count: todoItems(count)').execute()
-	
-		return JSONResponse(
-			content=data.data, status_code=200
-		)
-	except:
-		raise HTTPException(
-			status_code=404,
-			detail="todo lists not found"
-		)
-
-@app.get('/todo/{todo_id}/')
-async def get_todo(todo_id: str):
-	try:
-		data = supabase.table('todos').select('*, category:category(title), items: todoItems!inner(id, title, completed)').eq('id', todo_id).eq('todoItems.deleted', False).single().execute()
-		
-		
-		return JSONResponse(
-			content=data.data,
-			status_code=200
-		)
-	except:
-		raise HTTPException(
-			status_code=404,
-			detail="todo not found"
-		)
-
-@app.patch('/todo/item/{item_id}/')
-async def update_todo_item(item_id: str, value: TodoItemPatchSchema):
-	try:
-		response = (supabase.table('todoItems').update({"completed": value.completed}).eq("id", item_id).execute())
-		return JSONResponse(
-			content=response.data,
-			status_code=200
-		)
-	except:
-		raise HTTPException(
-			status_code=500,
-			detail="something went wrong"
-		)
-
-if __name__ == "__main__":
-	uvicorn.run("main:app",reload=True)

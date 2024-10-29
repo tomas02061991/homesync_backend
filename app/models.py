@@ -38,3 +38,13 @@ class TodoItemPatchSchema(BaseModel):
                 "completed": True
             }
         }
+
+class Family(BaseModel):
+    name: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": 'some family name'
+            }
+        }
